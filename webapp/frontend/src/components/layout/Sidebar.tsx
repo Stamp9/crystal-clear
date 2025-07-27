@@ -3,11 +3,13 @@ import LoadingSpinner from "../../components/common/LoadingSpinner";
 import RiskDetails from "../../components/layout/RiskDetails";
 import type { JsonData, Node } from "../../types";
 import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocalAlert } from "../ui/local-alert";
 import { useSearchParams } from "react-router";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DeploymentInfo } from "@/utils/queries";
 import { getRiskAnalysis } from "@/utils/queries";
+import { API } from "@/constants";
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -47,22 +49,8 @@ export default function Sidebar({
   const [riskScore, setRiskScore] = useState<number | null>(null);
   // Reusable placeholder component
   const PlaceholderMessage = ({ message }: { message: string }) => (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      padding: "2px 4px",
-      backgroundColor: "#f8f9fa",
-      borderRadius: "4px",
-    }}>
-      <span style={{
-        fontStyle: "italic",
-        color: "#666",
-        fontSize: "12px",
-        display: "flex",
-        alignItems: "center",
-        gap: "4px"
-      }}>
+    <div className="flex flex-col items-center py-0.5 px-1 bg-gray-50 rounded">
+      <span className="italic text-gray-600 text-xs flex items-center gap-1">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" fill="#888" />
         </svg>
@@ -71,13 +59,21 @@ export default function Sidebar({
     </div>
   );
 
+  // Cache risk analysis data using TanStack Query
+  const { data: riskScoreData } = useQuery({
+    queryKey: ['riskAnalysis', jsonData?.address],
+    queryFn: () => getRiskAnalysis(jsonData!.address, true),
+    enabled: !!jsonData?.address,
+    staleTime: API.STALE_TIME_MS,
+    gcTime: API.STALE_TIME_MS * 2, // Keep cache for 20 minutes
+    retry: API.RETRY_ATTEMPTS,
+  });
+
   useEffect(() => {
-    if (jsonData?.address) {
-      getRiskAnalysis(jsonData.address, true).then(score => {
-        setRiskScore(score);
-      });
+    if (riskScoreData !== undefined) {
+      setRiskScore(riskScoreData);
     }
-  }, [jsonData?.address]);
+  }, [riskScoreData]);
 
   const getRiskLevel = (score: number | null) => {
     if (score === null) return "Risk Level";
@@ -103,55 +99,15 @@ export default function Sidebar({
 
 
   return (
-    <div
-      style={{
-        flex: 1,
-        backgroundColor: "#f5f5f5",
-        borderLeft: "1px solid #2b2b2b",
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        fontFamily: "Funnel Sans, sans-serif",
-      }}
-    >
+    <div className="flex-1 bg-white border-l border-[#2b2b2b] flex flex-col h-full font-['Funnel_Sans,sans-serif']">
       {/* Pinned information section */}
-      <div
-        style={{
-          padding: "20px",
-          borderBottom: "1px solid #e0e0e0",
-          backgroundColor: "white",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-        }}
-      >
-        <div
-          style={{
-            fontWeight: "bold",
-            fontSize: "16px",
-            marginBottom: "10px",
-            textAlign: "left",
-          }}
-        >
+      <div className="p-5 border-b border-gray-300 bg-white shadow-sm px-4 py-2 ">
+        <div className="font-bold text-base mb-2.5 text-left">
           Contract Information
         </div>
 
-        <div
-          style={{
-            marginBottom: "5px",
-            display: "flex",
-            alignItems: "center",
-            width: "100%",
-            minHeight: "24px",
-          }}
-        >
-          <span
-            style={{
-              fontWeight: "500",
-              color: "#555",
-              marginRight: "4px",
-              fontSize: "14px",
-              textAlign: "left"
-            }}
-          >
+        <div className="mb-1.5 flex items-center w-full min-h-6">
+          <span className="font-medium text-gray-600 mr-1 text-sm text-left">
             Contract Address:{" "}
           </span>
 
@@ -162,13 +118,7 @@ export default function Sidebar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    style={{
-                      fontSize: "14px",
-                      marginRight: "8px",
-                      padding: "2px 4px",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
+                    className="text-sm mr-2 px-1 py-0.5 rounded cursor-pointer"
                     ref={addressContainerRef}
                   >
                     {jsonData && jsonData.address ? (
@@ -176,22 +126,12 @@ export default function Sidebar({
                     ) : addressFromParams ? (
                       `${addressFromParams.substring(0, 10)}...${addressFromParams.substring(addressFromParams.length - 8)}`
                     ) : (
-                      <span style={{ fontStyle: "italic", color: "#666", marginLeft: "4px" }}>No address selected</span>
+                      <span className="italic text-gray-600 ml-1">No address selected</span>
                     )}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={-10}
-                  style={{
-                    backgroundColor: "#333",
-                    color: "white",
-                    padding: "6px 10px",
-                    borderRadius: "2px",
-                    fontSize: "12px",
-                    fontFamily: "monospace",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
-                    maxWidth: "100%",
-                    wordBreak: "break-all"
-                  }}
+                  className="bg-gray-800 text-white px-2.5 py-1.5 rounded-sm text-xs font-mono shadow-lg max-w-full break-all"
                 >
                   <p>{jsonData?.address || addressFromParams || ""}</p>
                 </TooltipContent>
@@ -199,51 +139,22 @@ export default function Sidebar({
             </TooltipProvider>
           )}
           {(jsonData?.address || addressFromParams) && (
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                marginLeft: "auto"
-              }}
-            >
+            <div className="flex gap-2 ml-auto">
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(jsonData?.address || addressFromParams);
                   setAddressCopied(true);
                   setTimeout(() => setAddressCopied(false), 2000);
                 }}
-                style={{
-                  border: "none",
-                  background: "#fff",
-                  borderRadius: "0px",
-                  cursor: "pointer",
-                  fontSize: "11px",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "#555",
-                  position: "relative",
-                }}
+                className="border-none bg-white rounded-none cursor-pointer text-xs flex items-center text-gray-600 relative"
               >
-                <span style={{ margin: "4px" }}>
+                <span className="m-1">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" clip-rule="evenodd" d="M21 6H7V22H15V20H17V18H15V16H17V18H19V16H21V6ZM9 20V8H19V14H13V20H9ZM3 18H5V4H17V2H5H3V4V18Z" fill="#2b2b2b" />
                   </svg>
                 </span>
                 {addressCopied && (
-                  <div style={{
-                    position: "absolute",
-                    bottom: "100%",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    marginBottom: "8px",
-                    backgroundColor: "#7469B6",
-                    color: "white",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    whiteSpace: "nowrap",
-                    zIndex: 10,
-                  }}>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-purple-500 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
                     Copied!
                   </div>
                 )}
@@ -254,16 +165,7 @@ export default function Sidebar({
                 href={`https://etherscan.io/address/${jsonData?.address || addressFromParams}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  border: "none",
-                  background: "#fff",
-                  borderRadius: "0px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "#555",
-                  textDecoration: "none",
-                }}
+                className="border-none bg-white rounded-none cursor-pointer flex items-center text-gray-600 no-underline"
               >
                 <svg fill="none" height="16" width="16" viewBox="-2.19622685 .37688013 124.38617733 125.52740941" xmlns="http://www.w3.org/2000/svg"><path d="m25.79 58.415a5.157 5.157 0 0 1 5.181-5.156l8.59.028a5.164 5.164 0 0 1 5.164 5.164v32.48c.967-.287 2.209-.593 3.568-.913a4.3 4.3 0 0 0 3.317-4.187v-40.291a5.165 5.165 0 0 1 5.164-5.165h8.607a5.165 5.165 0 0 1 5.164 5.165v37.393s2.155-.872 4.254-1.758a4.311 4.311 0 0 0 2.632-3.967v-44.578a5.164 5.164 0 0 1 5.163-5.164h8.606a5.164 5.164 0 0 1 5.164 5.164v36.71c7.462-5.408 15.024-11.912 21.025-19.733a8.662 8.662 0 0 0 1.319-8.092 60.792 60.792 0 0 0 -58.141-40.829 60.788 60.788 0 0 0 -51.99 91.064 7.688 7.688 0 0 0 7.334 3.8c1.628-.143 3.655-.346 6.065-.63a4.3 4.3 0 0 0 3.815-4.268z" fill="#21325b" /><path d="m25.602 110.51a60.813 60.813 0 0 0 63.371 5.013 60.815 60.815 0 0 0 33.212-54.203c0-1.4-.065-2.785-.158-4.162-22.219 33.138-63.244 48.63-96.423 53.347" fill="#979695" /></svg>
               </a>
@@ -272,20 +174,8 @@ export default function Sidebar({
         </div>
 
         {/* Display deployer info */}
-        <div
-          style={{
-            marginBottom: "5px",
-            display: "flex",
-            alignItems: "center",
-            minHeight: "24px",
-          }}
-        >
-          <span style={{
-            fontWeight: "500",
-            color: "#555",
-            marginRight: "4px",
-            fontSize: "14px",
-          }}>Deployer: </span>
+        <div className="mb-1.5 flex items-center min-h-6">
+          <span className="font-medium text-gray-600 mr-1 text-sm">Deployer: </span>
 
 
           {!selectedNode && !addressFromParams ? (
@@ -295,87 +185,39 @@ export default function Sidebar({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        marginRight: "8px",
-                        padding: "2px 4px",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                      }}
-                    >
+                    <span className="text-sm mr-2 px-1 py-0.5 rounded cursor-pointer">
                       {`${deploymentInfo.deployer.substring(0, 10)}...${deploymentInfo.deployer.substring(deploymentInfo.deployer.length - 8)}`}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={-10}
-                    style={{
-                      backgroundColor: "#333",
-                      color: "white",
-                      padding: "6px 10px",
-                      borderRadius: "2px",
-                      fontSize: "12px",
-                      fontFamily: "monospace",
-                      boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
-                      maxWidth: "100%",
-                      wordBreak: "break-all"
-                    }}
+                    className="bg-gray-800 text-white px-2.5 py-1.5 rounded-sm text-xs font-mono shadow-lg max-w-full break-all"
                   >
                     <p>{deploymentInfo.deployer}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              <span style={{ fontStyle: "italic", color: "#666", marginLeft: "4px", fontSize: "12px" }}>Waiting for deployer info...</span>
+              <span className="italic text-gray-500 ml-1 text-xs">Waiting for deployer info...</span>
             )
           )}
 
           {deploymentInfo && deploymentInfo.deployer && (
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                marginLeft: "auto"
-              }}
-            >
+            <div className="flex gap-2 ml-auto">
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(deploymentInfo.deployer);
                   setDeployerCopied(true);
                   setTimeout(() => setDeployerCopied(false), 2000);
                 }}
-                style={{
-                  border: "none",
-                  background: "#fff",
-                  borderRadius: "0px",
-                  cursor: "pointer",
-                  fontSize: "11px",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "#555",
-                  position: "relative",
-                  // border: "1px solid #ddd",
-                }}
+                className="border-none bg-white rounded-none cursor-pointer text-xs flex items-center text-gray-600 relative"
               >
-                <span style={{ margin: "4px" }}>
+                <span className="m-1">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" clip-rule="evenodd" d="M21 6H7V22H15V20H17V18H15V16H17V18H19V16H21V6ZM9 20V8H19V14H13V20H9ZM3 18H5V4H17V2H5H3V4V18Z" fill="#2b2b2b" />
                   </svg>
                 </span>
                 {deployerCopied && (
-                  <div style={{
-                    position: "absolute",
-                    bottom: "100%",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    marginBottom: "8px",
-                    backgroundColor: "#7469B6",
-                    color: "white",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    whiteSpace: "nowrap",
-                    zIndex: 10,
-                  }}>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-purple-500 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
                     Copied!
                   </div>
                 )}
@@ -385,16 +227,7 @@ export default function Sidebar({
                 href={`https://etherscan.io/address/${deploymentInfo.deployer}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  border: "none",
-                  background: "#fff",
-                  borderRadius: "0px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "#555",
-                  textDecoration: "none",
-                }}
+                className="border-none bg-white rounded-none cursor-pointer flex items-center text-gray-600 no-underline"
               >
                 <svg fill="none" height="16" width="16" viewBox="-2.19622685 .37688013 124.38617733 125.52740941" xmlns="http://www.w3.org/2000/svg"><path d="m25.79 58.415a5.157 5.157 0 0 1 5.181-5.156l8.59.028a5.164 5.164 0 0 1 5.164 5.164v32.48c.967-.287 2.209-.593 3.568-.913a4.3 4.3 0 0 0 3.317-4.187v-40.291a5.165 5.165 0 0 1 5.164-5.165h8.607a5.165 5.165 0 0 1 5.164 5.165v37.393s2.155-.872 4.254-1.758a4.311 4.311 0 0 0 2.632-3.967v-44.578a5.164 5.164 0 0 1 5.163-5.164h8.606a5.164 5.164 0 0 1 5.164 5.164v36.71c7.462-5.408 15.024-11.912 21.025-19.733a8.662 8.662 0 0 0 1.319-8.092 60.792 60.792 0 0 0 -58.141-40.829 60.788 60.788 0 0 0 -51.99 91.064 7.688 7.688 0 0 0 7.334 3.8c1.628-.143 3.655-.346 6.065-.63a4.3 4.3 0 0 0 3.815-4.268z" fill="#21325b" /><path d="m25.602 110.51a60.813 60.813 0 0 0 63.371 5.013 60.815 60.815 0 0 0 33.212-54.203c0-1.4-.065-2.785-.158-4.162-22.219 33.138-63.244 48.63-96.423 53.347" fill="#979695" /></svg>
               </a>
@@ -403,27 +236,11 @@ export default function Sidebar({
         </div>
 
         {/* Display block range */}
-        <div
-          style={{
-            marginBottom: "5px",
-            display: "flex",
-            alignItems: "center",
-            minHeight: "24px",
-          }}
-        >
-          <span
-            style={{
-              fontWeight: "500",
-              color: "#555",
-              marginRight: "4px",
-              fontSize: "14px",
-            }}
-          >
+        <div className="mb-1.5 flex items-center min-h-6">
+          <span className="font-medium text-gray-600 mr-1 text-sm">
             Block Range:{" "}
           </span>
-          <span style={{
-            fontSize: "14px"
-          }}>
+          <span className="text-sm">
             {loading ? (
               <PlaceholderMessage message="Block range will be displayed here..." />
             ) : (
@@ -445,31 +262,9 @@ export default function Sidebar({
         </div>
 
         {/* Risk score panel - always visible */}
-        <div
-          style={{
-            marginTop: "10px",
-            padding: "15px",
-            backgroundColor: "#f9f9f9",
-            borderRadius: "6px",
-            border: "1px solid #eee",
-            // boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "5px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-              }}
-            >
+        <div className="!mt-2.5 !mb-2.5 p-4 bg-gray-50 rounded-md border border-gray-200 !py-2 !px-2">
+          <div className="flex justify-between items-center mb-1.5">
+            <div className="flex items-center w-full">
               {(() => {
                 const riskLevel = getRiskLevel(riskScore);
                 const riskColor = getRiskColor(riskScore);
@@ -478,50 +273,18 @@ export default function Sidebar({
                 const reportDisabled = riskScore === null;
 
                 return (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                    <span style={{ fontWeight: "bold", color: riskColor, fontSize: "16px", display: "flex", alignItems: "center" }}>
+                  <div className="flex items-center justify-between w-full gap-1">
+                    <span className="font-bold text-base flex items-center" style={{ color: riskColor }}>
                       {riskScore !== null ? `${riskScore}/100` : "Risk Score"}
 
                       <div
-                        style={{
-                          width: "18px",
-                          height: "18px",
-                          borderRadius: "50%",
-                          backgroundColor: "#f0f0f0",
-                          color: "#777",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          cursor: "pointer",
-                          marginLeft: "10px",
-                          position: "relative",
-                          border: "1px solid #ddd",
-                        }}
+                        className="w-4.5 h-4.5 rounded-full bg-gray-50 text-gray-500 flex items-center justify-center text-xs font-bold cursor-pointer ml-1 relative border border-gray-300"
                         onClick={() => setShowRiskExplanation(!showRiskExplanation)}
                       >
                         ?
                         {showRiskExplanation && (
                           <div
-                            style={{
-                              position: "absolute",
-                              top: "100%",
-                              left: "0",
-                              width: "220px",
-                              marginTop: "8px",
-                              padding: "10px 12px",
-                              backgroundColor: "#fff",
-                              borderRadius: "6px",
-                              lineHeight: "1.5",
-                              fontSize: "12px",
-                              color: "#555",
-                              boxShadow: "0 3px 8px rgba(0,0,0,0.15)",
-                              zIndex: 100,
-                              textAlign: "left",
-                              fontWeight: "normal",
-                              border: "1px solid #eee",
-                            }}
+                            className="absolute top-full left-0 w-55 mt-2 px-3 py-2 bg-white rounded-md leading-4 text-xs text-gray-600 shadow-lg z-50 text-left font-normal border border-gray-200"
                           >
                             Risk assessment is based on multiple factors including
                             metrics for immutability, admin privileges, auditing
@@ -531,15 +294,12 @@ export default function Sidebar({
                       </div>
                     </span>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="flex items-center gap-2.5">
                       <span
+                        className="font-medium px-2 py-1 rounded text-sm"
                         style={{
-                          fontWeight: "500",
                           color: riskTextColor,
-                          backgroundColor: riskBg,
-                          padding: "4px 10px",
-                          borderRadius: "4px",
-                          fontSize: "13px"
+                          backgroundColor: riskBg
                         }}
                       >
                         {riskLevel}
@@ -552,20 +312,10 @@ export default function Sidebar({
                           }
                         }}
                         disabled={reportDisabled}
-                        style={{
-                          border: "1px solid #ddd",
-                          background: "white",
-                          cursor: reportDisabled ? "default" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          color: reportDisabled ? "#aaa" : "#555",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                          opacity: reportDisabled ? 0.7 : 1,
-                          transition: "all 0.2s ease",
-                        }}
+                        className={`border border-gray-300 bg-white flex items-center justify-center px-2 py-1 rounded transition-all duration-200 shadow-sm ${reportDisabled
+                          ? 'cursor-default text-gray-400 opacity-70'
+                          : 'cursor-pointer text-gray-600 hover:bg-gray-50'
+                          }`}
                         title={reportDisabled ? "Report not available" : "Download report"}
                         onMouseOver={(e) => {
                           if (!reportDisabled) e.currentTarget.style.backgroundColor = "#f5f5f5";
@@ -574,10 +324,10 @@ export default function Sidebar({
                           if (!reportDisabled) e.currentTarget.style.backgroundColor = "white";
                         }}
                       >
-                        <svg style={{ marginRight: "4px" }} fill="none" height="16px" width="16px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <svg className="mr-1" fill="none" height="16px" width="16px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                           <path d="M11 4h2v8h2v2h-2v2h-2v-2H9v-2h2V4zm-2 8H7v-2h2v2zm6 0v-2h2v2h-2zM4 18h16v2H4v-2z" fill="currentColor" />
                         </svg>
-                        <span style={{ fontSize: "12px", fontWeight: "500" }}>Report</span>
+                        <span className="text-xs font-medium">Report</span>
                       </button>
                     </div>
                   </div>
@@ -589,22 +339,12 @@ export default function Sidebar({
       </div>
 
       {/* Tabs and content section */}
-      <div
-        style={{
-          display: "flex",
-          padding: "0 15px",
-          borderBottom: "1px solid #2b2b2b",
-          backgroundColor: "white",
-        }}
-      >
+      <div className="flex px-4 py-2 border-b border-[#2b2b2b] bg-white gap-4">
         {["Risk Details", "Interactions", "Dependency"].map((tab) => (
           <div
             key={tab}
-            className={`panel-tab ${activeTab === tab ? "active" : ""}`}
+            className={`panel-tab py-2.5 px-4 cursor-pointer mr-1.5 ${activeTab === tab ? "active" : ""}`}
             style={{
-              padding: "10px 15px",
-              cursor: "pointer",
-              marginRight: 5,
               borderBottom: activeTab === tab ? "2px solid #c9e0be" : "none",
               color: activeTab === tab ? "#287c84" : "inherit",
               fontWeight: activeTab === tab ? "500" : "normal",
@@ -618,16 +358,7 @@ export default function Sidebar({
           >
             {tab}
             {tab === "Dependency" && selectedNode && (
-              <span
-                style={{
-                  fontSize: "10px",
-                  backgroundColor: "white",
-                  color: "#3399ff",
-                  padding: "2px 5px",
-                  borderRadius: "10px",
-                  marginLeft: "5px",
-                }}
-              >
+              <span className="text-xs bg-white text-blue-500 px-1.5 py-0.5 rounded-full ml-1.5">
                 1
               </span>
             )}
@@ -636,91 +367,54 @@ export default function Sidebar({
       </div>
 
       {/* Scrollable content area */}
-      <div
-        style={{
-          overflowY: "auto",
-          flex: 1,
-        }}
-      >
+      <div className="overflow-y-auto flex-1">
         {loading ? (
           <LoadingSpinner
 
           />
         ) : (
           <>
-            {activeTab === "Interactions" && (
+            <div style={{ display: activeTab === "Interactions" ? "block" : "none" }}>
               <Interactions
                 jsonData={jsonData}
                 inputAddress={inputAddress}
                 highlightAddress={highlightAddress}
                 setHighlightAddress={setHighlightAddress}
               />
-            )}
+            </div>
 
-            {activeTab === "Risk Details" && (
+            <div style={{ display: activeTab === "Risk Details" ? "block" : "none" }}>
               <RiskDetails
                 jsonData={jsonData}
               />
-            )}
+            </div>
 
             {activeTab === "Dependency" && selectedNode && (
               <div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 15,
-                  }}
-                >
-                  <div style={{ fontWeight: "bold", marginLeft: 10 }}>Dependency Analysis</div>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="font-bold ml-2.5">Dependency Analysis</div>
                   <button
                     onClick={() => {
                       setSelectedNode(null);
                       setActiveTab("Risk Details");
                     }}
-                    style={{
-                      border: "none",
-                      background: "none",
-                      color: "#999",
-                      cursor: "pointer",
-                      fontSize: "12px",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
+                    className="border-none bg-transparent text-gray-400 cursor-pointer text-xs flex items-center"
                   >
-                    <span style={{ marginRight: "5px" }}>×</span>
+                    <span className="mr-1.5">×</span>
                     Clear
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    padding: "12px",
-                    backgroundColor: "white",
-                    borderRadius: "4px",
-                    border: "1px solid #eee",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <div style={{ fontWeight: "500", marginBottom: "8px" }}>
+                <div className="p-3 bg-white rounded border border-gray-200 mb-4">
+                  <div className="font-medium mb-2">
                     Selected Contract
                   </div>
-                  <div
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: "13px",
-                      padding: "5px 8px",
-                      backgroundColor: "#f5f5f5",
-                      borderRadius: "3px",
-                      wordBreak: "break-all",
-                    }}
-                  >
+                  <div className="font-mono text-sm px-2 py-1.5 bg-gray-100 rounded-sm break-all">
                     {selectedNode.id}
                   </div>
                 </div>
 
-                <div style={{ fontWeight: "bold", marginBottom: 10 }}>
+                <div className="font-bold mb-2.5">
                   Risk Metrics
                 </div>
                 {[
@@ -731,15 +425,7 @@ export default function Sidebar({
                 ].map((item, index) => (
                   <div
                     key={index}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "8px 10px",
-                      marginBottom: 5,
-                      backgroundColor: "white",
-                      borderRadius: "4px",
-                      border: "1px solid #eee",
-                    }}
+                    className="flex justify-between px-2.5 py-2 mb-1.5 bg-white rounded border border-gray-200"
                   >
                     <span>{item}</span>
                     <span
@@ -762,29 +448,16 @@ export default function Sidebar({
                   </div>
                 ))}
 
-                <div style={{ marginTop: 15, marginBottom: 15 }}>
-                  <div style={{ fontWeight: "bold", marginBottom: 10 }}>
+                <div className="mt-4 mb-4">
+                  <div className="font-bold mb-2.5">
                     Interaction Types
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                    }}
-                  >
+                  <div className="flex flex-wrap gap-2">
                     {["some_type", "some_type", "some_type"].map(
                       (type, index) => (
                         <div
                           key={index}
-                          style={{
-                            padding: "5px 10px",
-                            backgroundColor: "#e8f4fd",
-                            color: "#3399ff",
-                            borderRadius: "15px",
-                            fontSize: "12px",
-                            fontWeight: "500",
-                          }}
+                          className="px-2.5 py-1.5 bg-blue-50 text-blue-500 rounded-full text-xs font-medium"
                         >
                           {type}
                         </div>
@@ -793,15 +466,7 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    marginTop: 20,
-                    fontSize: 13,
-                    color: "#666",
-                    lineHeight: "1.5",
-                    textAlign: "left"
-                  }}
-                >
+                <div className="mt-5 text-sm text-gray-500 leading-relaxed text-left">
                   Dependency risks can propagate through the contract network.
                 </div>
               </div>

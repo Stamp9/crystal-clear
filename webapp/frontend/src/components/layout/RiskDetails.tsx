@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { JsonData } from "../../types";
 import InfoCard from "@/components/common/InfoCard";
 import {
@@ -8,6 +9,7 @@ import {
     getVerificationInfo,
     getAuditInfo,
 } from "../../utils/queries";
+import { API } from "@/constants";
 
 
 interface RiskDetailsProps {
@@ -24,7 +26,7 @@ interface RiskMetric {
 
 export default function RiskDetails({ jsonData }: RiskDetailsProps) {
     const [riskMetrics, setRiskMetrics] = useState<RiskMetric[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
     const defaultMetrics: RiskMetric[] = [
         { name: "Immutability", value: "waiting", level: "medium" },
@@ -33,250 +35,192 @@ export default function RiskDetails({ jsonData }: RiskDetailsProps) {
         { name: "Audit", value: "waiting", level: "medium" },
     ];
 
+    // Cache risk analysis data using TanStack Query
+    const { data: proxyData, error: proxyError, isLoading: proxyLoading } = useQuery({
+        queryKey: ['proxyInfo', jsonData?.address],
+        queryFn: () => getProxyInfo(jsonData!.address, true),
+        enabled: !!jsonData?.address,
+        staleTime: API.STALE_TIME_MS,
+        gcTime: API.STALE_TIME_MS * 2, // Keep cache for 20 minutes
+        retry: (failureCount, error: any) => {
+            // Don't retry on 500 errors, only on network failures
+            if (error?.status === 500) return false;
+            return failureCount < API.RETRY_ATTEMPTS;
+        },
+    });
+
+    const { data: permissionData, error: permissionError, isLoading: permissionLoading } = useQuery({
+        queryKey: ['permissionInfo', jsonData?.address],
+        queryFn: () => getPermissionInfo(jsonData!.address, true),
+        enabled: !!jsonData?.address,
+        staleTime: API.STALE_TIME_MS,
+        gcTime: API.STALE_TIME_MS * 2, // Keep cache for 20 minutes
+        retry: (failureCount, error: any) => {
+            // Don't retry on 500 errors, only on network failures
+            if (error?.status === 500) return false;
+            return failureCount < API.RETRY_ATTEMPTS;
+        },
+    });
+
+    const { data: verificationData, error: verificationError, isLoading: verificationLoading } = useQuery({
+        queryKey: ['verificationInfo', jsonData?.address],
+        queryFn: () => getVerificationInfo(jsonData!.address, true),
+        enabled: !!jsonData?.address,
+        staleTime: API.STALE_TIME_MS,
+        gcTime: API.STALE_TIME_MS * 2, // Keep cache for 20 minutes
+        retry: (failureCount, error: any) => {
+            // Don't retry on 500 errors, only on network failures
+            if (error?.status === 500) return false;
+            return failureCount < API.RETRY_ATTEMPTS;
+        },
+    });
+
+    const { data: auditData, error: auditError, isLoading: auditLoading } = useQuery({
+        queryKey: ['auditInfo', jsonData?.address],
+        queryFn: () => getAuditInfo(jsonData!.address, true),
+        enabled: !!jsonData?.address,
+        staleTime: API.STALE_TIME_MS,
+        gcTime: API.STALE_TIME_MS * 2, // Keep cache for 20 minutes
+        retry: (failureCount, error: any) => {
+            // Don't retry on 500 errors, only on network failures
+            if (error?.status === 500) return false;
+            return failureCount < API.RETRY_ATTEMPTS;
+        },
+    });
+
+    useEffect(() => {
+        if (jsonData?.address && jsonData.address !== currentAddress) {
+            setCurrentAddress(jsonData.address);
+            // Only set default metrics if we don't have cached data
+            const hasAnyData = proxyData || permissionData || verificationData || auditData;
+            if (!hasAnyData) {
+                setRiskMetrics(defaultMetrics);
+            }
+        }
+    }, [jsonData?.address, proxyData, permissionData, verificationData, auditData]);
+
     useEffect(() => {
         if (jsonData?.address) {
-            setRiskMetrics(defaultMetrics);
-            showDetailedRiskData(jsonData.address);
+            // Check if all queries have finished (either with data or error)
+            const allQueriesFinished = (
+                (!proxyLoading && (proxyData !== undefined || proxyError)) &&
+                (!permissionLoading && (permissionData !== undefined || permissionError)) &&
+                (!verificationLoading && (verificationData !== undefined || verificationError)) &&
+                (!auditLoading && (auditData !== undefined || auditError))
+            );
+
+            if (allQueriesFinished) {
+                updateRiskMetrics();
+            }
         }
-    }, [jsonData]);
+    }, [jsonData?.address, proxyData, permissionData, verificationData, auditData,
+        proxyError, permissionError, verificationError, auditError,
+        proxyLoading, permissionLoading, verificationLoading, auditLoading]);
 
+    const updateRiskMetrics = () => {
+        const updated: RiskMetric[] = [...riskMetrics];
 
-    // const showDetailedRiskData = async (address: string) => {
-    //     setLoading(true);
-
-    //     try {
-    //         const [proxyRes, permissionRes, verificationRes, auditRes] = await Promise.allSettled([
-    //             getProxyInfo(address, true),
-    //             getPermissionInfo(address, true),
-    //             getVerificationInfo(address, true),
-    //             getAuditInfo(address, true),
-    //         ]);
-
-    //         const updated: RiskMetric[] = [];
-
-    //         // Proxy
-    //         if (proxyRes.status === "fulfilled") {
-    //             const proxy = proxyRes.value;
-    //             const isProxy = proxy?.type?.toLowerCase() === "not a proxy";
-    //             console.log(proxy?.type);
-    //             updated.push({
-    //                 name: "Immutability",
-    //                 value: isProxy ? "immutable" : "proxy",
-    //                 level: isProxy ? "low" : "high",
-    //                 detail: "Proxy Type: " + proxy?.type + "\n" + "Proxy message: " + proxy?.message || "No additional message.",
-    //             });
-    //         } else {
-    //             updated.push({
-    //                 name: "Immutability",
-    //                 value: "Cannot get",
-    //                 level: "medium",
-    //                 detail: "Failed to fetch proxy info.",
-    //             });
-    //         }
-
-    //         // Permission
-    //         if (permissionRes.status === "fulfilled") {
-    //             const permission = permissionRes.value;
-    //             const adminFuncs = Array.isArray(permission?.function) ? permission.function : [];
-
-    //             updated.push({
-    //                 name: "Admin Privileges",
-    //                 value: adminFuncs.length > 0 ? "Found" : "None",
-    //                 level: adminFuncs.length > 0 ? "high" : "low",
-    //                 detail: adminFuncs.length > 0 ? "Admin functions: " + adminFuncs.join(", ") : "No admin function detected.",
-    //             });
-    //         } else {
-    //             updated.push({
-    //                 name: "Admin Privileges",
-    //                 value: "Cannot get",
-    //                 level: "medium",
-    //                 detail: "Failed to fetch permission info.",
-    //             });
-    //         }
-    //         // Verification
-    //         if (verificationRes.status === "fulfilled") {
-    //             const verification = verificationRes.value;
-    //             const verified = verification?.verification?.toLowerCase().includes("verified");
-    //             updated.push({
-    //                 name: "Verification",
-    //                 value: verified ? "verified" : "not verified",
-    //                 level: verified ? "low" : "high",
-    //                 detail: "Verification status: " + verification?.verification + "\n" + "Verified at " + verification?.verifiedAt || "No verification time found.",
-    //             });
-    //         } else {
-    //             updated.push({
-    //                 name: "Verification",
-    //                 value: "Not Verified",
-    //                 level: "medium",
-    //                 detail: "This contract is not verified on the Sourcify.",
-    //             });
-    //         }
-    //         // Audit
-    //         if (auditRes.status === "fulfilled") {
-    //             const audit = auditRes.value;
-    //             const audits = audit?.audits || [];
-    //             const protocol = audit?.contract?.protocol || "Unknown protocol";
-    //             const version = audit?.contract?.version || "Unknown version";
-
-    //             if (audits.length > 0) {
-    //                 const auditDetails = audits.map((a, i) => {
-    //                     return `🔹 Audit ${i + 1} by ${a.company}${a.url ? `\n ` : ""}`;
-    //                 }).join("");
-
-    //                 updated.push({
-    //                     name: "Audit",
-    //                     value: "Found",
-    //                     level: "low",
-    //                     detail: `Protocol: ${protocol}\nVersion: ${version}\n\n${auditDetails}`,
-    //                 });
-    //             } else {
-    //                 updated.push({
-    //                     name: "Audit",
-    //                     value: "None",
-    //                     level: "high",
-    //                     detail: `Protocol: ${protocol}\nVersion: ${version}\n\nNo audit found.`,
-    //                 });
-    //             }
-    //         } else {
-    //             updated.push({
-    //                 name: "Audit",
-    //                 value: "Not found",
-    //                 level: "medium",
-    //                 detail: "We couldn't find any audit info.",
-    //             })
-    //         }
-
-    //         setRiskMetrics(updated);
-    //     } catch (error) {
-    //         console.error("Unexpected error fetching risk data:", error);
-    //     } finally {
-    //         setLoading(false);
-    //     }
-    // };
-
-    const showDetailedRiskData = async (address: string) => {
-        setLoading(true);
-        const updated: RiskMetric[] = [];
-
-        try {
-            // Proxy
-            try {
-                const proxy = await getProxyInfo(address, true);
-                const isProxy = proxy?.type?.toLowerCase() === "not a proxy";
-                updated.push({
-                    name: "Immutability",
-                    value: isProxy ? "Immutable" : "Proxy",
-                    level: isProxy ? "low" : "high",
-                    note: isProxy ? "Unsafe" : "Safe",
-                    detail: `Proxy Type: ${proxy?.type || "N/A"}\nProxy message: ${proxy?.message || "No additional message."}`,
-                });
-            } catch {
-                updated.push({
-                    name: "Immutability",
-                    value: "Cannot get",
-                    level: "medium",
-                    note: "Is it safe?",
-                    detail: "Failed to fetch proxy info.",
-                });
+        // Proxy (Immutability)
+        if (updated[0]) {
+            const isProxy = proxyData && proxyData.type?.toLowerCase() !== "not a proxy";
+            const level = proxyError ? "medium" : (isProxy ? "high" : "low");
+            const proxyRiskMetric: RiskMetric = {
+                name: `${updated[0].name}`,
+                value: proxyError ? "Error" : (isProxy ? "Proxy" : "Immutable"),
+                level: level,
+            };
+            if (updated[0].note) proxyRiskMetric.note = updated[0].note;
+            if (proxyError) {
+                proxyRiskMetric.detail = "Failed to fetch proxy information";
+            } else if (proxyData) {
+                proxyRiskMetric.detail = `Proxy Type: ${proxyData.type || "N/A"}\nProxy message: ${proxyData.message || "No additional message."}`;
+            } else if (updated[0].detail) {
+                proxyRiskMetric.detail = updated[0].detail;
             }
-
-            // Permission
-            try {
-                const permission = await getPermissionInfo(address, true);
-                const adminFuncs = Array.isArray(permission?.function) ? permission.function : [];
-                updated.push({
-                    name: "Admin Privileges",
-                    value: adminFuncs.length > 0 ? "Found" : "None",
-                    level: adminFuncs.length > 0 ? "high" : "low",
-                    note: adminFuncs.length > 0 ? "Unsafe" : "Safe",
-                    detail: adminFuncs.length > 0 ? `Admin functions: ${adminFuncs.join(", ")}` : "No admin function detected.",
-                });
-            } catch {
-                updated.push({
-                    name: "Admin Privileges",
-                    value: "Cannot get",
-                    level: "medium",
-                    note: "Is it safe?",
-                    detail: "Failed to fetch permission info.",
-                });
-            }
-
-            // Verification
-            try {
-                const verification = await getVerificationInfo(address, true);
-                const verified = verification?.verification?.toLowerCase().includes("verified");
-                updated.push({
-                    name: "Verification",
-                    value: verified ? "Verified" : "Not verified",
-                    level: verified ? "low" : "high",
-                    note: verified ? "Safe" : "Unsafe",
-                    detail:
-                        (verification?.verification ? `Verification status: ${verification.verification}\n` : "") +
-                        (verification?.verifiedAt ? `Verified at: ${verification.verifiedAt}` : "No verification time found."),
-                });
-            } catch {
-                updated.push({
-                    name: "Verification",
-                    value: "Not Verified",
-                    level: "medium",
-                    note: "Is it safe?",
-                    detail: "This contract is not verified on Sourcify.",
-                });
-            }
-
-            // Audit
-            try {
-                const audit = await getAuditInfo(address, true);
-                const audits = audit?.audits || [];
-                const protocol = audit?.contract?.protocol || "Unknown protocol";
-                const version = audit?.contract?.version || "Unknown version";
-
-                if (audits.length > 0) {
-                    const auditDetails = audits
-                        .map((a, i) => `🔹 Audit ${i + 1} by ${a.company}${a.url ? `: ${a.url} \n` : ""}`)
-                        .join("\n");
-
-                    updated.push({
-                        name: "Audit",
-                        value: "Found",
-                        level: "low",
-                        note: "Safe",
-                        detail: `Protocol: ${protocol}\nVersion: ${version}\n\n${auditDetails}`,
-                    });
-                } else {
-                    updated.push({
-                        name: "Audit",
-                        value: "None",
-                        level: "high",
-                        note: "Unsafe",
-                        detail: `Protocol: ${protocol}\nVersion: ${version}\n\nNo audit found.`,
-                    });
-                }
-            } catch {
-                updated.push({
-                    name: "Audit",
-                    value: "Not found",
-                    level: "medium",
-                    note: "Is it safe?",
-                    detail: "We couldn't find any audit info.",
-                });
-            }
-
-            setRiskMetrics(updated);
-        } catch (error) {
-            console.error("Unexpected error fetching risk data:", error);
-        } finally {
-            setLoading(false);
+            updated[0] = proxyRiskMetric;
         }
+
+        // Permission
+        if (updated[1]) {
+            const level = permissionError ? "medium" : (permissionData ? "high" : "low");
+            const permissionRiskMetric: RiskMetric = {
+                name: `${updated[1].name}`,
+                value: permissionError ? "Error" : (permissionData ? `${permissionData.function?.length || 0} functions` : "N/A"),
+                level: level,
+            };
+            if (updated[1].note) permissionRiskMetric.note = updated[1].note;
+            if (permissionError) {
+                permissionRiskMetric.detail = "Failed to fetch permission information";
+            } else if (updated[1].detail) {
+                permissionRiskMetric.detail = updated[1].detail;
+            }
+            updated[1] = permissionRiskMetric;
+        }
+
+        // Verification
+        if (updated[2]) {
+            const verified = verificationData !== null;
+            const level = verificationError ? "medium" : (verified ? "low" : "high");
+            const verificationRiskMetric: RiskMetric = {
+                name: `${updated[2].name}`,
+                value: verificationError ? "Error" : (verified ? "Verified" : "Not Verified"),
+                level: level,
+            };
+            if (updated[2].note) verificationRiskMetric.note = updated[2].note;
+            if (verificationError) {
+                verificationRiskMetric.detail = "Failed to fetch verification information";
+            } else if (verificationData) {
+                verificationRiskMetric.detail =
+                    (verificationData.verification ? `Verification status: ${verificationData.verification}\n` : "") +
+                    (verificationData.verifiedAt ? `Verified at: ${verificationData.verifiedAt}` : "No verification time found.");
+            } else {
+                verificationRiskMetric.detail = "This contract is not verified on Sourcify.";
+            }
+            updated[2] = verificationRiskMetric;
+        }
+
+        // Audit
+        if (updated[3]) {
+            const audits = Array.isArray(auditData) ? auditData : [];
+            const hasAudits = audits.length > 0;
+            const level = auditError ? "medium" : (hasAudits ? "low" : "medium");
+            const auditRiskMetric: RiskMetric = {
+                name: `${updated[3].name}`,
+                value: auditError ? "Error" : (hasAudits ? "Audited" : "Not Audited"),
+                level: level,
+            };
+            if (updated[3].note) auditRiskMetric.note = updated[3].note;
+            if (auditError) {
+                auditRiskMetric.detail = "Failed to fetch audit information";
+            } else if (hasAudits) {
+                const protocol = audits[0]?.protocol || "Unknown";
+                const version = audits[0]?.version || "Unknown";
+                const auditDetails = audits.map((a, i) => {
+                    return `🔹 Audit ${i + 1} by ${a.company}${a.url ? `\n ` : ""}`;
+                }).join("");
+                auditRiskMetric.detail = `Protocol: ${protocol}\nVersion: ${version}\n\n${auditDetails}`;
+            } else {
+                auditRiskMetric.detail = "No audit found for this contract.";
+            }
+            updated[3] = auditRiskMetric;
+        }
+
+        setRiskMetrics(updated);
     };
 
 
 
 
-    return (
-        <div className="w-full min-h-full h-fit p-6 bg-white rounded-xl shadow-md border border-gray-200">
 
-            {loading ? (
+    // Determine if we should show loading state - only if we have no data and are loading
+    const hasAnyData = proxyData || permissionData || verificationData || auditData;
+    const hasProcessedData = riskMetrics.length > 0 && riskMetrics.some(m => m.value !== "waiting");
+    const isLoading = jsonData?.address && (proxyLoading || permissionLoading || verificationLoading || auditLoading) && !hasAnyData && !hasProcessedData;
+
+    return (
+        <div className="w-full min-h-full h-fit bg-white">
+
+            {isLoading ? (
                 <div className="mt-10 flex justify-center items-center">
                     <div className="mt-50 animate-pulse px-4 py-2 bg-red-100 border border-gray-200 rounded-md shadow-sm text-sm text-gray-500 italic" style={{ marginTop: "100px", padding: "10px" }}>
                         🔍 Fetching Risk Details...
@@ -287,7 +231,7 @@ export default function RiskDetails({ jsonData }: RiskDetailsProps) {
                     display: "flex",
                     flexDirection: "column",
                     width: "100%",
-                    padding: "10px",
+                    padding: "16px",
                     gap: "10px",
 
                 }}>
@@ -303,39 +247,43 @@ export default function RiskDetails({ jsonData }: RiskDetailsProps) {
                                     alignItems: "center",
 
                                 }}>
-                                    <span className="text-l font-medium text-gray-800" style={{ fontSize: "16px" }}>{metric.name}</span>
-                                    {/* <span style={{
-                                        fontSize: "12px",
-                                        textAlign: "right",
-                                        marginLeft: "6px",
-                                        padding: "4px",
-                                    }}
-                                        className={`text-xs font-semibold px-2 py-0.5 rounded
-                  ${metric.level === "high"
-                                                ? "bg-red-100 text-red-600"
+                                    <span className="text-l font-medium text-gray-800 !mr-2" style={{ fontSize: "16px" }}>{metric.name}</span>
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                        {/* Risk Level Badge */}
+                                        <span style={{
+                                            fontSize: "11px",
+                                            fontWeight: "bold",
+                                            padding: "3px 8px",
+                                            borderRadius: "6px",
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.5px"
+                                        }}
+                                            className={`${metric.level === "high"
+                                                ? "bg-red-500 text-white"
                                                 : metric.level === "medium"
-                                                    ? "bg-orange-100 text-orange-600"
-                                                    : "bg-green-100 text-green-600"}
-                `}
-                                    >
-                                        {metric.value}
-                                    </span> */}
-                                    <span style={{
-                                        fontSize: "12px",
-                                        textAlign: "right",
-                                        marginLeft: "6px",
-                                        padding: "4px",
-                                    }}
-                                        className={`text-xs font-semibold px-2 py-0.5 rounded
-                  ${metric.level === "high"
-                                                ? "bg-red-100 text-red-600"
-                                                : metric.level === "medium"
-                                                    ? "bg-orange-100 text-orange-600"
-                                                    : "bg-green-100 text-green-600"}
-                `}
-                                    >
-                                        {metric.note}
-                                    </span>
+                                                    ? "bg-orange-500 text-white"
+                                                    : "bg-green-500 text-white"}
+                                            `}
+                                        >
+                                            {metric.level} risk
+                                        </span>
+                                        {/* Value Badge */}
+                                        <span style={{
+                                            fontSize: "12px",
+                                            padding: "3px 8px",
+                                            borderRadius: "6px",
+                                        }}
+                                            className={`text-xs font-medium
+                                            ${metric.level === "high"
+                                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                                    : metric.level === "medium"
+                                                        ? "bg-orange-50 text-orange-700 border border-orange-200"
+                                                        : "bg-green-50 text-green-700 border border-green-200"}
+                                            `}
+                                        >
+                                            {metric.value}
+                                        </span>
+                                    </div>
 
                                 </div>
                             }
