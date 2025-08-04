@@ -1,6 +1,7 @@
 # webapp db and cache files
-postgres_data/
-redis_data/
+webapp/Postgresql-data/
+webapp/Redis/
+
 
 # webapp analysis files
 crytic-export/
