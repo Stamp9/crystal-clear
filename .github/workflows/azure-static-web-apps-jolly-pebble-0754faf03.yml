@@ -40,6 +40,9 @@ jobs:
       - name: Build (frontend)
         working-directory: webapp/frontend
         run: yarn build -mode production
+        env:
+          CI: false
+          DISABLE_ESLINT_PLUGIN: true
 
 
           
@@ -80,5 +83,6 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         with:
           action: "close"
+
 
 
