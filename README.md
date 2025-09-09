@@ -12,24 +12,9 @@ A platform for analyzing smart contract supply chains on Ethereum, funded by the
 
 ---
 
-## 🚀 Quick Start
+## How to use it?
 
-```bash
-git clone https://github.com/chains-project/crystal-clear.git
-cd crystal-clear/scsc
-poetry install
-
-# CLI Analysis Example
-scsc analyze --address 0xE592427A0AEce92De3Edee1F18E0157C05861564 \
-            --from-block 0x14c3b86 \
-            --to-block 0x14c3b90 \
-            --export-dot graph.dot
-
-# Or launch the interactive web interface
-scsc web --address 0xE592427A0AEce92De3Edee1F18E0157C05861564 \
-         --from-block 0x14c3b86 \
-         --to-block 0x14c3b90
-```
+See <https://github.com/mab-xyz/crystal-clear/tree/main/scsc>
 
 ## 🏗️ Project Structure
 

@@ -45,13 +45,37 @@ SCSC provides two main commands:
 
 ### 1. Analyze Command (CLI Analysis)
 
+**Dependency Graph**
 ```bash
 scsc analyze --url <node_url> \
             --address <contract_address> \
             --from-block <block> \
             --to-block <block> \
             [options]
+
+# this exports the smart contract dependency graph
+scsc analyze
+            --address 0xE592427A0AEce92De3Edee1F18E0157C05861564 \
+            --from-block 0x14c3b86 \
+            --to-block 0x14c3b90 \
+            --export-dot graph.dot
 ```
+
+**Risk analysis per contract** (computes the risk factors, incl. proxy and permission risks)
+
+TODO
+
+```
+scsc risk --url <node_url> \
+            --scope [single|supply-chain]
+            --address <contract_address> \
+            [options]
+
+scsc risk
+            --address 0xE592427A0AEce92De3Edee1F18E0157C05861564 \
+            --export-dot graph.dot
+```
+
 
 ### 2. Web Interface
 
