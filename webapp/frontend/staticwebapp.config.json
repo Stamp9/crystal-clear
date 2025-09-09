@@ -1,0 +1,5 @@
+{
+  "environmentVariables": {
+    "VITE_API_BASE": "https://crystal-clear-api-d7d8c7bbekd8amge.swedencentral-01.azurewebsites.net/"
+  }
+}
